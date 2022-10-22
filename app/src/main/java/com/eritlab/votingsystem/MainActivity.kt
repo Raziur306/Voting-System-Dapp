@@ -13,22 +13,23 @@ import com.eritlab.votingsystem.databinding.ActivityMainBinding
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.web3j.abi.datatypes.Address
 import org.web3j.crypto.Credentials
 import org.web3j.protocol.Web3j
 import org.web3j.protocol.http.HttpService
 import org.web3j.tx.RawTransactionManager
 import org.web3j.tx.TransactionManager
 import java.math.BigInteger
-
-
+import kotlin.contracts.contract
 
 
 class MainActivity : AppCompatActivity() {
     private lateinit var web3j: Web3j;
     private lateinit var binding: ActivityMainBinding
-    private val  PRIVATE_KEY  = "0af907ef79bb3ec3957606190fb3376f62cb9426388338e4f3502a686b8ed658"
+    private val PRIVATE_KEY = "0af907ef79bb3ec3957606190fb3376f62cb9426388338e4f3502a686b8ed658"
     private val GASS_PRICE: BigInteger = BigInteger.valueOf(20000000000);
     private val GASS_LIMIT: BigInteger = BigInteger.valueOf(6721975)
+    private lateinit var votingContract: VotingContract
 
     //deployed address
     private val _liveDataOfDeployedAddress = MutableLiveData<String>()
@@ -65,12 +66,22 @@ class MainActivity : AppCompatActivity() {
         if (deployedSavedStringAddress == null || deployedSavedStringAddress.isNotEmpty()) {
             binding.progressBar.visibility = View.VISIBLE
             deployContract(web3j, transactionManager, getCredentialFromPrivateKey())
+        } else {
+            //get votingContract
+            votingContract = loadContract(deployedSavedStringAddress!!, web3j, transactionManager)
         }
+
+
+
+
 
         liveDataOfDeployedAddress.observe(this) {
             if (it != null && it.isNotEmpty()) {
                 saveDeployedAddress(sharedPref, it)
                 binding.progressBar.visibility = View.GONE
+                //get votingContract
+                votingContract =
+                    loadContract(deployedSavedStringAddress!!, web3j, transactionManager)
             } else {
                 Toast.makeText(this, "Something went wrong", Toast.LENGTH_LONG).show()
             }
@@ -112,6 +123,21 @@ class MainActivity : AppCompatActivity() {
             }
             binding.progressBar.visibility = View.GONE
         }
+    }
+
+
+    private fun loadContract(
+        contractAddress: String,
+        web3j: Web3j,
+        transactionManager: TransactionManager
+    ): VotingContract {
+        return VotingContract.load(
+            contractAddress,
+            web3j,
+            transactionManager,
+            GASS_PRICE,
+            GASS_LIMIT
+        )
     }
 
     //Deploy contract
