@@ -26,7 +26,7 @@ import kotlin.contracts.contract
 class MainActivity : AppCompatActivity() {
     private lateinit var web3j: Web3j;
     private lateinit var binding: ActivityMainBinding
-    private val PRIVATE_KEY = "0af907ef79bb3ec3957606190fb3376f62cb9426388338e4f3502a686b8ed658"
+    private val PRIVATE_KEY = "dd865337f0e63c035b0e8a4513393ad7c9cde7412aaf3e2302fb962bb5fcb6a0"
     private val GASS_PRICE: BigInteger = BigInteger.valueOf(20000000000);
     private val GASS_LIMIT: BigInteger = BigInteger.valueOf(6721975)
     private lateinit var votingContract: VotingContract
@@ -35,13 +35,24 @@ class MainActivity : AppCompatActivity() {
     private val _liveDataOfDeployedAddress = MutableLiveData<String>()
     private val liveDataOfDeployedAddress: LiveData<String> = _liveDataOfDeployedAddress;
 
+    //load toastMessage
+    private val _liveTostString = MutableLiveData<String>()
+    private val liveToastString: LiveData<String> = _liveTostString
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         binding.startVoting.setOnClickListener {
-
+            try {
+                // CoroutineScope(Dispatchers.IO).launch {
+                val message = votingContract.startVote().sendAsync().get().revertReason
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                //}
+            } catch (e: Exception) {
+                Toast.makeText(this@MainActivity, e.message, Toast.LENGTH_LONG).show()
+            }
         }
 
         binding.registerCandidate.setOnClickListener {
@@ -84,6 +95,12 @@ class MainActivity : AppCompatActivity() {
                     loadContract(deployedSavedStringAddress!!, web3j, transactionManager)
             } else {
                 Toast.makeText(this, "Something went wrong", Toast.LENGTH_LONG).show()
+            }
+        }
+        //observe toast string
+        liveToastString.observe(this) {
+            if (it.isNotEmpty() && it != null) {
+                Toast.makeText(this, it.toString(), Toast.LENGTH_LONG).show()
             }
         }
 
@@ -146,12 +163,18 @@ class MainActivity : AppCompatActivity() {
         transactionManager: TransactionManager,
         credentialFromPrivateKey: Credentials
     ) {
-        CoroutineScope(Dispatchers.IO).launch {
+        try {
             _liveDataOfDeployedAddress.postValue(
                 VotingContract.deploy(web3j, transactionManager, GASS_PRICE, GASS_LIMIT)
-                    .send().contractAddress
+                    .sendAsync().get().contractAddress
             )
+            binding.showErrorMsg.visibility = View.GONE
+        } catch (e: Exception) {
+            binding.showErrorMsg.text = e.message.toString()
+            Toast.makeText(this, e.message.toString(), Toast.LENGTH_LONG).show()
         }
+
+
     }
 
 

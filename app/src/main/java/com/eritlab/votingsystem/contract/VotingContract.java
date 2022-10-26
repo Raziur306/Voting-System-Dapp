@@ -3,6 +3,7 @@ package com.eritlab.votingsystem.contract;
 import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.Collections;
+
 import org.web3j.abi.TypeReference;
 import org.web3j.abi.datatypes.DynamicStruct;
 import org.web3j.abi.datatypes.Function;
@@ -81,7 +82,7 @@ public class VotingContract extends Contract {
         final Function function = new Function(
                 FUNC_REGISTRATIONFORCANDIDATE,
                 Arrays.<Type>asList(new org.web3j.abi.datatypes.Utf8String(name),
-                new org.web3j.abi.datatypes.Utf8String(symbol)),
+                        new org.web3j.abi.datatypes.Utf8String(symbol)),
                 Collections.<TypeReference<?>>emptyList());
         return executeRemoteCallTransaction(function);
     }
@@ -105,7 +106,8 @@ public class VotingContract extends Contract {
     public RemoteFunctionCall<candidate> voteCountStatus(String symbol) {
         final Function function = new Function(FUNC_VOTECOUNTSTATUS,
                 Arrays.<Type>asList(new org.web3j.abi.datatypes.Utf8String(symbol)),
-                Arrays.<TypeReference<?>>asList(new TypeReference<candidate>() {}));
+                Arrays.<TypeReference<?>>asList(new TypeReference<candidate>() {
+                }));
         return executeRemoteCallSingleValueReturn(function, candidate.class);
     }
 
