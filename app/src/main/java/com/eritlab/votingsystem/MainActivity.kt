@@ -1,43 +1,47 @@
 package com.eritlab.votingsystem
 
+import android.app.ActionBar.LayoutParams
 import android.content.SharedPreferences
 import android.graphics.Color
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.eritlab.votingsystem.adapter.RecyclerViewInterface
+import com.eritlab.votingsystem.adapter.VotingAdapter
 import com.eritlab.votingsystem.contract.VotingContract
 import com.eritlab.votingsystem.databinding.ActivityMainBinding
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import org.web3j.abi.datatypes.Address
+import com.eritlab.votingsystem.databinding.RegisterUserBinding
+import com.eritlab.votingsystem.databinding.VoteAndDetailsBinding
 import org.web3j.crypto.Credentials
 import org.web3j.protocol.Web3j
 import org.web3j.protocol.http.HttpService
 import org.web3j.tx.RawTransactionManager
 import org.web3j.tx.TransactionManager
 import java.math.BigInteger
-import kotlin.contracts.contract
 
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), RecyclerViewInterface {
     private lateinit var web3j: Web3j;
     private lateinit var binding: ActivityMainBinding
-    private val PRIVATE_KEY = "dd865337f0e63c035b0e8a4513393ad7c9cde7412aaf3e2302fb962bb5fcb6a0"
+    private val PRIVATE_KEY = "0fa25925548a5853ae798c31203868b86e110718825ec48d505c08065f7f9826"
     private val GASS_PRICE: BigInteger = BigInteger.valueOf(20000000000);
     private val GASS_LIMIT: BigInteger = BigInteger.valueOf(6721975)
     private lateinit var votingContract: VotingContract
+    private lateinit var symbolList: MutableList<Any?>
 
     //deployed address
     private val _liveDataOfDeployedAddress = MutableLiveData<String>()
     private val liveDataOfDeployedAddress: LiveData<String> = _liveDataOfDeployedAddress;
 
     //load toastMessage
-    private val _liveTostString = MutableLiveData<String>()
-    private val liveToastString: LiveData<String> = _liveTostString
+    private val _liveToastString = MutableLiveData<String>()
+    private val liveToastString: LiveData<String> = _liveToastString
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,20 +50,18 @@ class MainActivity : AppCompatActivity() {
 
         binding.startVoting.setOnClickListener {
             try {
-                // CoroutineScope(Dispatchers.IO).launch {
                 val message = votingContract.startVote().sendAsync().get().revertReason
                 Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-                //}
             } catch (e: Exception) {
                 Toast.makeText(this@MainActivity, e.message, Toast.LENGTH_LONG).show()
             }
         }
 
         binding.registerCandidate.setOnClickListener {
-
+            registerCandidate()
         }
         binding.giveVoteAndStatus.setOnClickListener {
-
+            showVotingDialog()
         }
 
         connectWithGanache()
@@ -79,11 +81,8 @@ class MainActivity : AppCompatActivity() {
             deployContract(web3j, transactionManager, getCredentialFromPrivateKey())
         } else {
             //get votingContract
-            votingContract = loadContract(deployedSavedStringAddress!!, web3j, transactionManager)
+            votingContract = loadContract(deployedSavedStringAddress, web3j, transactionManager)
         }
-
-
-
 
 
         liveDataOfDeployedAddress.observe(this) {
@@ -107,12 +106,44 @@ class MainActivity : AppCompatActivity() {
     }
 
 
+    private fun registerCandidate() {
+        val dialog = AlertDialog.Builder(this)
+        val layoutBinding = RegisterUserBinding.inflate(layoutInflater)
+        dialog.setView(layoutBinding.root)
+        val alertDialog = dialog.create()
+        alertDialog.show()
+        layoutBinding.registerButton.setOnClickListener {
+            if (layoutBinding.nameCandidate.text.isEmpty()) {
+                layoutBinding.nameCandidate.error = "Can't be empty."
+            } else if (layoutBinding.symbolCandidate.text.isEmpty()) {
+                layoutBinding.symbolCandidate.error = "Can't be empty"
+            } else {
+                try {
+                    votingContract.registrationForCandidate(
+                        layoutBinding.nameCandidate.text.toString(),
+                        layoutBinding.symbolCandidate.text.toString()
+                    ).sendAsync()
+                    Toast.makeText(this@MainActivity, "Successfully Registered", Toast.LENGTH_SHORT)
+                        .show()
+                } catch (e: Exception) {
+                    Toast.makeText(this@MainActivity, e.message, Toast.LENGTH_SHORT).show()
+
+                }
+
+                alertDialog.dismiss()
+            }
+
+        }
+
+    }
+
+
     private fun getCredentialFromPrivateKey(): Credentials {
         return Credentials.create(PRIVATE_KEY)
     }
 
     private fun connectWithGanache() {
-        web3j = Web3j.build(HttpService("http://192.168.0.108:8545"))
+        web3j = Web3j.build(HttpService("http://192.168.0.102:7545"))
         try {
             val clientVersion = web3j.web3ClientVersion()
                 .sendAsync().get()
@@ -187,5 +218,33 @@ class MainActivity : AppCompatActivity() {
 
     private fun getDeployedAddress(sharedPreferences: SharedPreferences): String? {
         return sharedPreferences.getString("deployAddress", null)
+    }
+
+
+    private fun showVotingDialog() {
+        val dialog = AlertDialog.Builder(this)
+        val layoutBinding = VoteAndDetailsBinding.inflate(layoutInflater)
+        dialog.setView(layoutBinding.root)
+        try {
+            symbolList = votingContract.symbolList.sendAsync().get()
+            val adapter = VotingAdapter(symbolList, this)
+            layoutBinding.candidateRecycler.layoutManager = LinearLayoutManager(this)
+            layoutBinding.candidateRecycler.adapter = adapter
+            val alertDialog = dialog.create()
+            alertDialog.show()
+            alertDialog.window?.setLayout(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
+        } catch (e: Exception) {
+            Toast.makeText(this@MainActivity, e.message.toString(), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+
+    override fun onItemClick(position: Int) {
+        try {
+            votingContract.giveVotes(symbolList[position] as String)
+            Toast.makeText(this@MainActivity, "Voted Successfully", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(this@MainActivity, e.message.toString(), Toast.LENGTH_SHORT).show()
+        }
     }
 }
