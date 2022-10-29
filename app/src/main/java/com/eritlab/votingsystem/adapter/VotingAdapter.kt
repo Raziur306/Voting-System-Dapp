@@ -31,7 +31,6 @@ class VotingAdapter(
     }
 
     override fun getItemCount(): Int {
-        Log.d("Ronju", list.size.toString())
         return list.size
     }
 

@@ -34,6 +34,7 @@ class MainActivity : AppCompatActivity(), RecyclerViewInterface {
     private val GASS_LIMIT: BigInteger = BigInteger.valueOf(6721975)
     private lateinit var votingContract: VotingContract
     private lateinit var symbolList: MutableList<Any?>
+    private lateinit var votingLayoutBinding: VoteAndDetailsBinding
 
     //deployed address
     private val _liveDataOfDeployedAddress = MutableLiveData<String>()
@@ -51,8 +52,9 @@ class MainActivity : AppCompatActivity(), RecyclerViewInterface {
         binding.startVoting.setOnClickListener {
             try {
                 val message = votingContract.startVote().sendAsync().get().revertReason
-                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                Toast.makeText(this, message.toString(), Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
+                Log.d("Ronju", e.message.toString())
                 Toast.makeText(this@MainActivity, e.message, Toast.LENGTH_LONG).show()
             }
         }
@@ -223,13 +225,14 @@ class MainActivity : AppCompatActivity(), RecyclerViewInterface {
 
     private fun showVotingDialog() {
         val dialog = AlertDialog.Builder(this)
-        val layoutBinding = VoteAndDetailsBinding.inflate(layoutInflater)
-        dialog.setView(layoutBinding.root)
+        votingLayoutBinding = VoteAndDetailsBinding.inflate(layoutInflater)
+        dialog.setView(votingLayoutBinding.root)
+        totalVoteCount()
         try {
             symbolList = votingContract.symbolList.sendAsync().get()
             val adapter = VotingAdapter(symbolList, this)
-            layoutBinding.candidateRecycler.layoutManager = LinearLayoutManager(this)
-            layoutBinding.candidateRecycler.adapter = adapter
+            votingLayoutBinding.candidateRecycler.layoutManager = LinearLayoutManager(this)
+            votingLayoutBinding.candidateRecycler.adapter = adapter
             val alertDialog = dialog.create()
             alertDialog.show()
             alertDialog.window?.setLayout(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
@@ -240,11 +243,36 @@ class MainActivity : AppCompatActivity(), RecyclerViewInterface {
 
 
     override fun onItemClick(position: Int) {
+        totalVoteCount()
+        if (votingLayoutBinding.voterKey.text.isEmpty()) {
+            votingLayoutBinding.voterKey.error = "Can't be empty."
+            Toast.makeText(this, "You must have private voter key", Toast.LENGTH_SHORT).show()
+        } else {
+            try {
+                votingContract.giveVotes(
+                    symbolList[position] as String,
+                    votingLayoutBinding.voterKey.text.toString()
+                ).sendAsync()
+            } catch (e: Exception) {
+                Toast.makeText(this@MainActivity, e.message.toString(), Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    //total vote count
+    private fun totalVoteCount() {
+        var totalVote: BigInteger = BigInteger.valueOf(0)
+        votingLayoutBinding.totalVote.text = "0"
         try {
-            votingContract.giveVotes(symbolList[position] as String)
-            Toast.makeText(this@MainActivity, "Voted Successfully", Toast.LENGTH_SHORT).show()
+            symbolList.forEach {
+                votingLayoutBinding.totalVote.text =
+                    (BigInteger.valueOf(votingLayoutBinding.totalVote.text.toString().toLong())
+                            +
+                            votingContract.voteCountStatus(it.toString()).sendAsync()
+                                .get().voteCount).toString()
+            }
         } catch (e: Exception) {
-            Toast.makeText(this@MainActivity, e.message.toString(), Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, e.message.toString(), Toast.LENGTH_SHORT).show()
         }
     }
 }
